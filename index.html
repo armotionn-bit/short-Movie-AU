@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<title>Monitoring Film AU</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<!-- === FIREBASE V8 (WAJIB untuk kode kamu) === -->
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-storage.js"></script>
+
+<style>
+body { font-family: Arial; margin: 0; background: #f4f4f4; }
+header { background: #222; color: white; padding: 15px; text-align: center; }
+.container { padding: 15px; }
+.card { background: white; padding: 15px; border-radius: 8px; margin-bottom: 15px; box-shadow: 0 0 5px rgba(0,0,0,0.1); }
+input, select, button { padding: 10px; width: 100%; margin-top: 5px; }
+button { background: #007bff; color: white; border: none; border-radius: 6px; cursor: pointer; }
+button:hover { background: #0061c9; }
+img { max-width: 100%; border-radius: 8px; margin-top: 10px; }
+</style>
+</head>
+
+<body>
+
+<header>
+    <h2>Monitoring Produksi Film AU</h2>
+</header>
+
+<div class="container">
+
+    <!-- LOGIN -->
+    <div id="loginCard" class="card">
+        <h3>Login</h3>
+        <input id="email" type="email" placeholder="Email">
+        <input id="pass" type="password" placeholder="Password">
+        <button onclick="login()">Masuk</button>
+    </div>
+
+    <!-- USER PANEL -->
+    <div id="userPanel" style="display:none">
+        <div class="card">
+            <h3>Upload Bukti Pengerjaan</h3>
+
+            <input id="taskName" placeholder="Nama Tugas (Contoh: Scene 4)">
+            <input id="desc" placeholder="Deskripsi pekerjaan">
+            <input type="file" id="photoInput" accept="image/*">
+
+            <button onclick="uploadBukti()">Kirim Bukti</button>
+
+            <div id="previewArea"></div>
+        </div>
+    </div>
+
+    <!-- ADMIN PANEL -->
+    <div id="adminPanel" style="display:none">
+        <div class="card">
+            <h3>Dashboard Admin</h3>
+            <p>Semua laporan kerja crew akan muncul di sini:</p>
+            <div id="logList"></div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+// === CONFIG FIREBASE ===
+const firebaseConfig = {
+  apiKey: "AIzaSyCrVRLZBooXjtC0gwOpk4PNMHV2i1I13Js",
+  authDomain: "data-short-movie-au.firebaseapp.com",
+  projectId: "data-short-movie-au",
+  storageBucket: "data-short-movie-au.firebasestorage.app",
+  messagingSenderId: "256339763622",
+  appId: "1:256339763622:web:6346d78fe3c54ba216ef67",
+  measurementId: "G-6B0QK0KF68"
+};
+
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+const storage = firebase.storage();
+
+//===== LOGIN =====//
+function login(){
+    const email = document.getElementById("email").value;
+    const pass = document.getElementById("pass").value;
+
+    auth.signInWithEmailAndPassword(email, pass)
+    .then(()=>{
+        alert("Login berhasil!");
+
+        document.getElementById("loginCard").style.display = "none";
+
+        if(email === "admin@filmau.com"){  
+            document.getElementById("adminPanel").style.display = "block";
+            loadLogs();
+        } else {
+            document.getElementById("userPanel").style.display = "block";
+        }
+    })
+    .catch(err=>{
+        alert("Login gagal: " + err.message);
+    });
+}
+
+//===== UPLOAD BUKTI =====//
+function uploadBukti(){
+    const user = auth.currentUser;
+    if(!user) return alert("Kamu belum login.");
+
+    const taskName = document.getElementById("taskName").value;
+    const desc = document.getElementById("desc").value;
+    const file = document.getElementById("photoInput").files[0];
+
+    if(!taskName || !file){
+        alert("Lengkapi nama tugas & pilih foto!");
+        return;
+    }
+
+    const ref = storage.ref("bukti/" + Date.now() + "_" + file.name);
+
+    ref.put(file)
+    .then(snapshot => snapshot.ref.getDownloadURL())
+    .then(url => {
+        
+        db.collection("logs").add({
+            user: user.email,
+            tugas: taskName,
+            deskripsi: desc,
+            fotoURL: url,
+            waktu: new Date().toLocaleString()
+        });
+
+        document.getElementById("previewArea").innerHTML = `
+            <p><b>Berhasil Upload!</b></p>
+            <img src="${url}">
+        `;
+    });
+}
+
+//===== LOAD LOGS UNTUK ADMIN =====//
+function loadLogs(){
+    db.collection("logs").orderBy("waktu","desc")
+    .onSnapshot(snap=>{
+        let html = "";
+
+        snap.forEach(doc=>{
+            const d = doc.data();
+            html += `
+                <div class="card">
+                    <b>${d.user}</b><br>
+                    Tugas: ${d.tugas}<br>
+                    Deskripsi: ${d.deskripsi}<br>
+                    Waktu: ${d.waktu}<br>
+                    <img src="${d.fotoURL}">
+                </div>
+            `;
+        });
+
+        document.getElementById("logList").innerHTML = html;
+    });
+}
+
+</script>
+
+</body>
+</html>
